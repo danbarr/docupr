@@ -2,6 +2,9 @@
 
 DocuPR is a Python application that analyzes pull requests (PRs) in a GitHub repository since the previous release, identifies which ones involve user-facing changes, and generates a summary of the documentation updates needed.
 
+> [!IMPORTANT]
+> This is a sample app I generated entirely using Cline + Claude 3.7 Sonnet. My goal was to get more familiar with AI coding tools and see if I could create a working app without touching a single line of code by hand. There may be dragons here, so YMMV.
+
 ## Features
 
 - **GitHub Integration**: Fetches pull requests made since the last release using the GitHub API.
