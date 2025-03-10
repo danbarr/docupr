@@ -6,12 +6,15 @@ This module handles the analysis of pull requests using OpenAI's API.
 
 import json
 import logging
+import sys
 import time
 from typing import Dict, List, Any, Optional
 
 from openai import OpenAI
+from pydantic import ValidationError
 
 from .config import get_openai_config
+from .schemas import AnalysisResult, DocsImpact
 
 logger = logging.getLogger(__name__)
 
@@ -88,10 +91,54 @@ class OpenAIAnalyzer:
                 {"role": "user", "content": user_message}
             ],
             max_tokens=self.max_tokens,
-            temperature=self.temperature
+            temperature=self.temperature,
+            response_format={"type": "json_object"}
         )
         
         return response.choices[0].message.content
+    
+    def _extract_json_from_markdown(self, content: str) -> Optional[str]:
+        """
+        Extract JSON from markdown code blocks.
+        
+        Args:
+            content (str): The content to extract JSON from
+            
+        Returns:
+            Optional[str]: The extracted JSON string, or None if not found
+        """
+        # Check for markdown code blocks
+        if "```json" in content and "```" in content:
+            start = content.find("```json") + 7
+            end = content.find("```", start)
+            if start > 6 and end > start:
+                return content[start:end].strip()
+        
+        # Check for any JSON-like structure
+        start_idx = content.find("{")
+        end_idx = content.rfind("}")
+        
+        if start_idx >= 0 and end_idx > start_idx:
+            return content[start_idx:end_idx + 1]
+            
+        return None
+    
+    def _create_default_result(self) -> Dict[str, Any]:
+        """
+        Create a default result when parsing fails.
+        
+        Returns:
+            Dict[str, Any]: The default result
+        """
+        return {
+            "user_facing": True,  # Assume user-facing by default
+            "docs_impact": {
+                "update_existing": [],
+                "create_new": [],
+                "suggested_content": []
+            },
+            "reasoning": "Extracted from non-JSON response"
+        }
     
     def _parse_openai_response(self, content: str) -> Dict[str, Any]:
         """
@@ -106,102 +153,37 @@ class OpenAIAnalyzer:
         # Clean and prepare the content for JSON parsing
         content = content.strip()
         
-        # Try different approaches to extract valid JSON
+        # Try direct parsing with validation
         try:
-            # First attempt: direct parsing
-            result = json.loads(content)
-        except json.JSONDecodeError:
-            logger.warning("Failed to parse OpenAI response as JSON, attempting extraction")
-            
-            # Second attempt: extract JSON from markdown code blocks
-            if "```json" in content and "```" in content:
-                try:
-                    # Extract content between ```json and ```
-                    start = content.find("```json") + 7
-                    end = content.find("```", start)
-                    if start > 6 and end > start:
-                        json_str = content[start:end].strip()
-                        result = json.loads(json_str)
-                    else:
-                        raise json.JSONDecodeError("Invalid JSON in markdown", "", 0)
-                except json.JSONDecodeError:
-                    # Third attempt: find any JSON-like structure
-                    start_idx = content.find("{")
-                    end_idx = content.rfind("}")
-                    
-                    if start_idx >= 0 and end_idx > start_idx:
-                        json_str = content[start_idx:end_idx + 1]
-                        try:
-                            result = json.loads(json_str)
-                        except json.JSONDecodeError:
-                            # If all extraction attempts fail, create a default result
-                            logger.error(f"Failed to extract JSON from OpenAI response: {content}")
-                            result = {
-                                "user_facing": True,  # Assume user-facing by default
-                                "docs_impact": {
-                                    "update_existing": [],
-                                    "create_new": [],
-                                    "suggested_content": []
-                                },
-                                "reasoning": "Extracted from non-JSON response"
-                            }
-                    else:
-                        # If no JSON-like structure found, create a default result
-                        logger.error("No JSON structure found in response")
-                        result = {
-                            "user_facing": True,  # Assume user-facing by default
-                            "docs_impact": {
-                                "update_existing": [],
-                                "create_new": [],
-                                "suggested_content": []
-                            },
-                            "reasoning": "Extracted from non-JSON response"
-                        }
-            else:
-                # Fourth attempt: find any JSON-like structure
-                start_idx = content.find("{")
-                end_idx = content.rfind("}")
-                
-                if start_idx >= 0 and end_idx > start_idx:
-                    json_str = content[start_idx:end_idx + 1]
-                    try:
-                        result = json.loads(json_str)
-                    except json.JSONDecodeError:
-                        # If all extraction attempts fail, create a default result
-                        logger.error(f"Failed to extract JSON from OpenAI response: {content}")
-                        result = {
-                            "user_facing": True,  # Assume user-facing by default
-                            "docs_impact": {
-                                "update_existing": [],
-                                "create_new": [],
-                                "suggested_content": []
-                            },
-                            "reasoning": "Extracted from non-JSON response"
-                        }
-                else:
-                    # If no JSON-like structure found, create a default result
-                    logger.error("No JSON structure found in response")
-                    result = {
-                        "user_facing": True,  # Assume user-facing by default
-                        "docs_impact": {
-                            "update_existing": [],
-                            "create_new": [],
-                            "suggested_content": []
-                        },
-                        "reasoning": "Extracted from non-JSON response"
-                    }
+            data = json.loads(content)
+            return AnalysisResult(**data).model_dump()
+        except (json.JSONDecodeError, ValidationError):
+            # Only log warning on JSON decode error
+            if isinstance(sys.exc_info()[1], json.JSONDecodeError):
+                logger.warning("Failed to parse OpenAI response as JSON, attempting extraction")
         
-        # Try to extract useful information from the raw response if we have a default result
-        if "reasoning" in result and result["reasoning"] == "Extracted from non-JSON response":
-            # Try to find documentation-related terms in the content
-            if "documentation" in content.lower():
-                # Extract sentences containing "documentation"
-                sentences = content.split(". ")
-                for sentence in sentences:
-                    if "documentation" in sentence.lower():
-                        if "suggested_content" not in result["docs_impact"]:
-                            result["docs_impact"]["suggested_content"] = []
-                        result["docs_impact"]["suggested_content"].append(sentence.strip())
+        # Try extracting JSON from markdown
+        json_str = self._extract_json_from_markdown(content)
+        if json_str:
+            try:
+                data = json.loads(json_str)
+                return AnalysisResult(**data).model_dump()
+            except (json.JSONDecodeError, ValidationError):
+                pass
+        
+        # If all extraction attempts fail, create a default result
+        logger.error(f"Failed to extract valid JSON from OpenAI response")
+        
+        # Create default result
+        result = self._create_default_result()
+        
+        # Try to extract useful information from the raw response
+        if "documentation" in content.lower():
+            # Extract sentences containing "documentation"
+            sentences = content.split(". ")
+            for sentence in sentences:
+                if "documentation" in sentence.lower():
+                    result["docs_impact"]["suggested_content"].append(sentence.strip())
         
         return result
     
@@ -233,7 +215,7 @@ class OpenAIAnalyzer:
 
         Analyze the PR title, description, and code changes (diff) to make your determination.
         
-        Format your response as JSON with the following structure:
+        Your response MUST be a valid JSON object matching this structure:
         {
           "user_facing": boolean,
           "docs_impact": {
@@ -243,6 +225,8 @@ class OpenAIAnalyzer:
           },
           "reasoning": "brief explanation of your analysis"
         }
+        
+        Do not include any text outside the JSON object.
         """
         
         # Add any extra instructions if provided
