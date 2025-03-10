@@ -56,6 +56,8 @@ def get_openai_config() -> Dict[str, Any]:
         "model": os.getenv("OPENAI_MODEL", "gpt-4-turbo"),
         "max_tokens": int(os.getenv("OPENAI_MAX_TOKENS", "2000")),
         "temperature": float(os.getenv("OPENAI_TEMPERATURE", "0.7")),
+        "base_url": os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1"),
+        "extra_instructions": os.getenv("OPENAI_EXTRA_INSTRUCTIONS", ""),
     }
 
 def get_github_config() -> Dict[str, Any]:

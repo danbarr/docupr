@@ -35,13 +35,14 @@ class OpenAIAnalyzer:
         self.client = OpenAI(
             api_key=config["api_key"],
             http_client=http_client,
-            base_url="https://api.openai.com/v1",
+            base_url=config["base_url"],
             timeout=60.0
         )
         
         self.model = config["model"]
         self.max_tokens = config["max_tokens"]
         self.temperature = config["temperature"]
+        self.extra_instructions = config["extra_instructions"]
         
         # Rate limiting
         self.request_count = 0
@@ -243,6 +244,10 @@ class OpenAIAnalyzer:
           "reasoning": "brief explanation of your analysis"
         }
         """
+        
+        # Add any extra instructions if provided
+        if self.extra_instructions:
+            system_prompt += f"\n\nAdditional instructions:\n{self.extra_instructions}"
         
         # Prepare the user message with PR details
         user_message = f"""
