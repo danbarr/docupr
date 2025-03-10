@@ -163,6 +163,16 @@ class GitHubClient:
         
         logger.info(f"Fetching PRs merged after {since_date}")
         
+        # Ensure the since_date is timezone-aware
+        # If it's naive (e.g., from CLI --since parameter), make it timezone-aware
+        if since_date.tzinfo is None:
+            # Convert to midnight UTC on the specified date
+            import pytz
+            since_date = pytz.UTC.localize(
+                since_date.replace(hour=0, minute=0, second=0, microsecond=0)
+            )
+            logger.info(f"Converted naive datetime to timezone-aware: {since_date}")
+        
         # Use GitHub's search API to find PRs more efficiently
         # This is much faster than iterating through all PRs
         # Use ISO 8601 format for precise timestamp comparison
