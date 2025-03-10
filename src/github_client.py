@@ -165,7 +165,8 @@ class GitHubClient:
         
         # Use GitHub's search API to find PRs more efficiently
         # This is much faster than iterating through all PRs
-        query = f"repo:{repo.full_name} is:pr is:merged merged:>={since_date.strftime('%Y-%m-%d')}"
+        # Use ISO 8601 format for precise timestamp comparison
+        query = f"repo:{repo.full_name} is:pr is:merged merged:>={since_date.strftime('%Y-%m-%dT%H:%M:%S%z')}"
         logger.info(f"Using search query: {query}")
         
         # Get merged PRs since the date using search
@@ -187,12 +188,8 @@ class GitHubClient:
             
             # Check if PR is merged
             if pr.merged and pr.merged_at:
-                # Convert the date string to a date object for comparison
-                # This handles the timezone issue by using only the date part
-                pr_date = pr.merged_at.date()
-                since_date_only = since_date.date()
-                
-                if pr_date >= since_date_only:
+                # Use the full datetime object for more precise comparison
+                if pr.merged_at >= since_date:
                     result.append(pr)
                     count += 1
                 
