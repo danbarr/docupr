@@ -204,16 +204,36 @@ class OpenAIAnalyzer:
         system_prompt = """
         You are a documentation specialist analyzing GitHub pull requests. Your task is to:
 
-        1. Determine if this PR contains user-facing changes (Yes/No)
-           - User-facing changes include UI modifications, API changes, new features, 
-             configuration changes, or anything that affects how users interact with the software.
+        1. Determine if this PR contains end-user facing changes (Yes/No)
+           - End-user facing changes are those that affect the people who use the finished software product, 
+             NOT the developers working on the code
+           
+           Examples of end-user facing changes:
+           - Changes to CLI commands or arguments
+           - Changes to configuration file formats
+           - Changes to APIs that users directly interact with
+           - New features or modifications to existing features that users interact with
+           - Changes to error messages shown to users
+           - Changes to user documentation
+           
+           Examples of NON-user facing changes:
+           - Internal refactoring
+           - Code cleanup or formatting
+           - Development documentation updates
+           - Test improvements
+           - CI/CD pipeline changes
+           - Internal logging changes
+           - Performance optimizations (unless they require user action)
+           - Security fixes (unless they require user action)
            
         2. Identify documentation impact:
-           - Existing documentation files that need updates
-           - New documentation sections that should be created
-           - Suggested content or wording for documentation updates
+           - Only suggest documentation updates for changes that affect end-users
+           - Existing user documentation files that need updates
+           - New user documentation sections that should be created
+           - Suggested content for user-facing documentation updates
 
         Analyze the PR title, description, and code changes (diff) to make your determination.
+        Be conservative - if a change is purely internal, mark it as not user-facing.
         
         Your response MUST be a valid JSON object matching this structure:
         {
@@ -223,7 +243,7 @@ class OpenAIAnalyzer:
             "create_new": ["list of new docs to create"],
             "suggested_content": ["list of suggested content or sections"]
           },
-          "reasoning": "brief explanation of your analysis"
+          "reasoning": "brief explanation of your analysis and why it is/isn't user-facing"
         }
         
         Do not include any text outside the JSON object.
