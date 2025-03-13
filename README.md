@@ -7,7 +7,7 @@ DocuPR is a Python application that analyzes pull requests (PRs) in a GitHub rep
 
 ## Features
 
-- **GitHub Integration**: Fetches pull requests made since the last release using the GitHub API.
+- **GitHub Integration**: Fetches pull requests made since the last release using the GitHub API (automatically excludes Dependabot PRs).
 - **Change Identification**: Analyzes PRs to determine which ones have user-facing changes.
 - **OpenAI Integration**: Uses OpenAI's API to analyze changes and summarize documentation updates needed.
 - **Security**: Securely stores API keys using environment variables.

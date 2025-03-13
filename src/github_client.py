@@ -176,7 +176,8 @@ class GitHubClient:
         # Use GitHub's search API to find PRs more efficiently
         # This is much faster than iterating through all PRs
         # Use ISO 8601 format for precise timestamp comparison
-        query = f"repo:{repo.full_name} is:pr is:merged merged:>={since_date.strftime('%Y-%m-%dT%H:%M:%S%z')}"
+        # Exclude Dependabot PRs with -author:app/dependabot
+        query = f"repo:{repo.full_name} is:pr is:merged -author:app/dependabot merged:>={since_date.strftime('%Y-%m-%dT%H:%M:%S%z')}"
         logger.info(f"Using search query: {query}")
         
         # Get merged PRs since the date using search
@@ -196,14 +197,19 @@ class GitHubClient:
             pr_number = issue.number
             pr = repo.get_pull(pr_number)
             
-            # Check if PR is merged
+            # Check if PR is merged and not from Dependabot
             if pr.merged and pr.merged_at:
+                # Skip Dependabot PRs (double-check in case search filter didn't catch it)
+                if pr.user.login == "dependabot[bot]" or pr.user.login == "dependabot-preview[bot]":
+                    logger.info(f"Skipping Dependabot PR #{pr.number}: {pr.title}")
+                    continue
+                    
                 # Use the full datetime object for more precise comparison
                 if pr.merged_at >= since_date:
                     result.append(pr)
                     count += 1
                 
-        logger.info(f"Found {len(result)} PRs merged after {since_date}")
+        logger.info(f"Found {len(result)} PRs merged after {since_date} (excluding Dependabot PRs)")
         return result
     
     async def get_pr_diff(self, pr: PullRequest) -> str:
