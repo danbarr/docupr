@@ -228,26 +228,23 @@ class TestGitHubClientAsync:
         mock_issues = [mock_issue1, mock_issue2]
         client.github.search_issues.return_value = mock_issues
         
-        # Mock the PRs with proper date objects
+        # Import pytz for timezone-aware datetimes
+        import pytz
+        
+        # Mock the PRs with proper timezone-aware date objects
         mock_pr1 = MagicMock()
         mock_pr1.merged = True
-        mock_merged_at1 = datetime(2023, 2, 1)
-        # Mock the date() method to return a date object
-        mock_pr1.merged_at = MagicMock()
-        mock_pr1.merged_at.date.return_value = mock_merged_at1.date()
+        mock_pr1.merged_at = pytz.UTC.localize(datetime(2023, 2, 1))
         
         mock_pr2 = MagicMock()
         mock_pr2.merged = True
-        mock_merged_at2 = datetime(2023, 1, 15)
-        # Mock the date() method to return a date object
-        mock_pr2.merged_at = MagicMock()
-        mock_pr2.merged_at.date.return_value = mock_merged_at2.date()
+        mock_pr2.merged_at = pytz.UTC.localize(datetime(2023, 1, 15))
         
         # Mock the get_pull method
         mock_repo.get_pull.side_effect = lambda number: mock_pr1 if number == 1 else mock_pr2
         
-        # Get PRs since a specific date
-        since_date = datetime(2023, 1, 1)
+        # Get PRs since a specific date (make it timezone-aware)
+        since_date = pytz.UTC.localize(datetime(2023, 1, 1))
         prs = await client.get_prs_since_date(mock_repo, since_date)
         
         # Assert that the correct PRs were returned
